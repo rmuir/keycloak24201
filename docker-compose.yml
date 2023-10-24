@@ -1,0 +1,54 @@
+version: '2'
+services:
+  dc1:
+    image: instantlinux/samba-dc:4.18.5-r0
+    cap_add: [ CAP_SYS_ADMIN ]
+    secrets: [ samba-admin-password ]
+    hostname: dc1
+    dns:
+      - 127.0.0.1
+    environment:
+      ADMIN_PASSWORD_SECRET: samba-admin-password
+      REALM: example.com
+    volumes:
+      - "./smb.conf:/etc/samba/conf.d/smb.conf"
+    healthcheck:
+      test: ["CMD", "smbclient", "-L", "\\\\127.0.0.1"]
+      interval: 2s
+      timeout: 2s
+      retries: 45
+  keycloak:
+    image: keycloak/keycloak:22.0.4
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    command:
+      - start-dev
+      - --health-enabled=true
+  keycloakhealth:
+    image: curlimages/curl:8.4.0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://keycloak:8080/health/ready"]
+      interval: 2s
+      timeout: 2s
+      retries: 45
+    entrypoint: ["tail", "-f", "/dev/null"]
+    stop_signal: SIGKILL
+  ansible:
+    image: librespace/ansible:8.4.0
+    secrets: [ samba-admin-password ]
+    environment:
+      ANSIBLE_VERBOSITY: "2"
+      ANSIBLE_CALLBACK_RESULT_FORMAT: yaml
+    volumes:
+      - "./playbook.yml:/playbook.yml:ro"
+    command: ansible-playbook playbook.yml
+    depends_on:
+      dc1:
+        condition: service_healthy
+      keycloakhealth:
+        condition: service_healthy
+
+secrets:
+  samba-admin-password:
+    file: samba_admin_password.txt

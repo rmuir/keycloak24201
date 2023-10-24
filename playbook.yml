@@ -1,0 +1,49 @@
+- hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Create Keycloak LDAP user federation
+      community.general.keycloak_user_federation:
+        auth_keycloak_url: http://keycloak:8080
+        auth_realm: master
+        auth_username: admin
+        auth_password: admin
+        name: ldap
+        provider_id: ldap
+        provider_type: org.keycloak.storage.UserStorageProvider
+        config:
+          vendor: ad
+          connectionUrl: ldap://dc1
+          authType: simple
+          bindDn: CN=Administrator,CN=Users,dc=example,dc=com
+          bindCredential: "{{ lookup('file', '/run/secrets/samba-admin-password') }}"
+          editMode: WRITABLE
+          usersDn: CN=Users,dc=example,dc=com
+          usernameLDAPAttribute: sAMAccountName
+          rdnLDAPAttribute: cn
+          uuidLDAPAttribute: objectGUID
+          userObjectClasses: person, organizationalPerson, user
+          importEnabled: false
+          syncRegistrations: true
+    - name: Create new user
+      community.general.keycloak_user:
+        auth_keycloak_url: http://keycloak:8080
+        auth_realm: master
+        auth_username: admin
+        auth_password: admin
+        realm: master
+        username: vinz
+        firstName: Vinz
+        lastName: clortho
+        credentials:
+          - type: password
+            value: clortho$1
+            temporary: false
+    - name: Disable user, this is where the bug strikes
+      community.general.keycloak_user:
+        auth_keycloak_url: http://keycloak:8080
+        auth_realm: master
+        auth_username: admin
+        auth_password: admin
+        realm: master
+        username: vinz
+        enabled: false
